@@ -1,0 +1,10 @@
+{
+  "name": "Cricscore — Live Cricket",
+  "short_name": "Cricscore",
+  "description": "Live cricket scores and ball-by-ball commentary.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7f3",
+  "theme_color": "#071b16",
+  "orientation": "portrait"
+}
