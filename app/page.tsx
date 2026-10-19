@@ -47,7 +47,7 @@ export default function Home() {
         if (!response.ok) throw new Error("Match feed unavailable");
         const data = (await response.json()) as ApiResponse;
         if (!active) return;
-        if (data.matches?.length) setMatches(data.matches);
+        if (Array.isArray(data.matches)) setMatches(data.matches);
         setMode(data.mode ?? "demo");
         setNotice(data.message ?? "Match feed loaded.");
       } catch {
@@ -55,7 +55,7 @@ export default function Home() {
       }
     };
     void load();
-    const timer = window.setInterval(load, 30000);
+    const timer = window.setInterval(load, 900000);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
 
@@ -123,7 +123,7 @@ export default function Home() {
           <div className="filter-tabs" role="tablist" aria-label="Match status">{filters.map((item) => <button key={item} role="tab" aria-selected={filter === item} className={filter === item ? "filter-tab filter-active" : "filter-tab"} onClick={() => setFilter(item)}>{item}{item === "Live" && liveCount > 0 && <span className="filter-count">{liveCount}</span>}</button>)}</div>
           <div className="filter-controls"><label className="search-box"><Search size={17}/><input aria-label="Search teams or series" placeholder="Search teams, series..." value={query} onChange={(e) => setQuery(e.target.value)}/></label><label className="format-select"><select aria-label="Filter by format" value={format} onChange={(e) => setFormat(e.target.value)}><option>All formats</option><option>T20</option><option>ODI</option><option>TEST</option></select><ChevronDown size={15}/></label></div>
         </div>
-        {mode === "demo" && <div className="demo-notice"><span className="notice-mark">i</span><span><strong>Preview mode:</strong> {notice} Scores below are illustrative, not real-time match data.</span></div>}
+        {mode !== "live" && <div className="demo-notice"><span className="notice-mark">i</span><span><strong>{mode === "demo" ? "Preview mode:" : "Feed status:"}</strong> {notice}{mode === "demo" ? " Scores below are illustrative, not real-time match data." : ""}</span></div>}
         <div className="match-grid" id="all-matches">
           {visibleMatches.length ? visibleMatches.map((match) => (
             <article key={match.id} className={selected === match.id ? "match-card match-card-selected" : "match-card"}>
