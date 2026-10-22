@@ -20,6 +20,40 @@ type ScorecardPayload = {
   data?: { name?: string; scorecard?: ScorecardInnings[] };
   error?: string;
 };
+type CommentaryBall = { over: string; text: string; runs?: string; wicket?: boolean };
+type CommentaryPayload = { data?: unknown; error?: string; info?: unknown };
+
+function normalizeCommentary(data: unknown): CommentaryBall[] {
+  const found: CommentaryBall[] = [];
+  const seen = new Set<string>();
+  const walk = (value: unknown, depth = 0) => {
+    if (depth > 7 || value == null) return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => walk(item, depth + 1));
+      return;
+    }
+    if (typeof value !== "object") return;
+    const row = value as Record<string, unknown>;
+    const text = displayScorecardValue(row.commentary ?? row.comment ?? row.comm ?? row.description ?? row.text ?? row.event);
+    const overValue = displayScorecardValue(row.over ?? row.overNumber ?? row.over_number ?? row.overNo);
+    const ballValue = displayScorecardValue(row.ball ?? row.ballNumber ?? row.ball_number ?? row.delivery);
+    if (text !== "—" && text.length > 2) {
+      const over = overValue === "—" ? "" : overValue;
+      const ball = ballValue === "—" ? "" : ballValue;
+      const label = over ? `${over}${ball && !over.includes(".") ? `.${ball}` : ""}` : ball;
+      const key = `${label}|${text}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        found.push({ over: label, text, runs: displayScorecardValue(row.runs ?? row.run ?? row.totalRuns), wicket: Boolean(row.wicket ?? row.isWicket ?? row.is_wicket) });
+      }
+    }
+    for (const [key, child] of Object.entries(row)) {
+      if (/comment|ball|over|delivery|event|data|inning|innings|bbb/i.test(key)) walk(child, depth + 1);
+    }
+  };
+  walk(data);
+  return found;
+}
 
 const fallbackMatches: Match[] = [
   { id:"demo-1",format:"T20",status:"LIVE",series:"International T20 • Demo match",venue:"Sample Cricket Ground",startTime:"In progress",teamA:{name:"India",code:"IND",score:"168/4",overs:"18.2"},teamB:{name:"Australia",code:"AUS",score:"—",overs:"Yet to bat"},summary:"Sample scoreboard — not live data",isDemo:true },
@@ -63,6 +97,9 @@ export default function Home() {
   const [scorecard, setScorecard] = useState<ScorecardPayload["data"] | null>(null);
   const [scorecardError, setScorecardError] = useState("");
   const [scorecardLoading, setScorecardLoading] = useState(false);
+  const [commentary, setCommentary] = useState<CommentaryBall[]>([]);
+  const [commentaryError, setCommentaryError] = useState("");
+  const [commentaryLoading, setCommentaryLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -100,7 +137,31 @@ export default function Home() {
   useEffect(() => {
     setScorecard(null);
     setScorecardError("");
+    setCommentary([]);
+    setCommentaryError("");
   }, [featured?.id]);
+
+  const loadCommentary = async () => {
+    if (!featured || featured.isDemo) {
+      setCommentaryError("Choose a real match from the CricketData feed first.");
+      return;
+    }
+    setCommentaryLoading(true);
+    setCommentaryError("");
+    setCommentary([]);
+    try {
+      const response = await fetch(`/api/commentary?id=${encodeURIComponent(featured.id)}`, { cache: "no-store" });
+      const payload = (await response.json()) as CommentaryPayload;
+      if (!response.ok || payload.error) throw new Error(payload.error ?? "Ball-by-ball commentary is unavailable for this match.");
+      const balls = normalizeCommentary(payload.data);
+      if (!balls.length) throw new Error("The provider returned data, but no recognizable delivery commentary was found. The response format or API access may differ for this match.");
+      setCommentary(balls);
+    } catch (error) {
+      setCommentaryError(error instanceof Error ? error.message : "Unable to load ball-by-ball commentary.");
+    } finally {
+      setCommentaryLoading(false);
+    }
+  };
 
   const loadScorecard = async () => {
     if (!featured || featured.isDemo) {
@@ -203,6 +264,18 @@ export default function Home() {
               <button className="primary-button" onClick={loadScorecard} disabled={scorecardLoading || !featured || featured.isDemo}>{scorecardLoading ? "Loading…" : "Load scorecard"} <ArrowRight size={15}/></button>
             </div>
             {scorecardError && <p className="scorecard-error" role="status">{scorecardError}</p>}
+            <div className="scorecard-action commentary-action">
+              <div><strong>Ball-by-ball commentary</strong><p>Fetch actual delivery commentary when enabled by your CricketData plan.</p></div>
+              <button className="primary-button" onClick={loadCommentary} disabled={commentaryLoading || !featured || featured.isDemo}>{commentaryLoading ? "Loading…" : "Load commentary"} <ArrowRight size={15}/></button>
+            </div>
+            {commentaryError && <p className="scorecard-error" role="status">{commentaryError}</p>}
+            {commentary.length > 0 && <div className="ball-commentary-list" aria-live="polite">
+              {commentary.map((ball, index) => <article className="ball-commentary-item" key={`${ball.over}-${index}`}>
+                <span className="ball-over">{ball.over || index + 1}</span>
+                <div><p>{ball.text}</p>{ball.runs && ball.runs !== "—" && <small>Runs: {ball.runs}</small>}</div>
+                {ball.wicket && <span className="wicket-tag">WICKET</span>}
+              </article>)}
+            </div>}
             {scorecard?.scorecard?.length ? scorecard.scorecard.map((innings, inningsIndex) => (
               <div className="innings-card" key={innings.inning ?? inningsIndex}>
                 <h4>{innings.inning ?? `Innings ${inningsIndex + 1}`}</h4>
