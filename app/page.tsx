@@ -34,6 +34,22 @@ function statusLabel(status: Match["status"]) {
   return status === "LIVE" ? "LIVE" : status === "UPCOMING" ? "UPCOMING" : "RESULT";
 }
 
+function displayScorecardValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map(displayScorecardValue).filter((part) => part !== "—").join(", ") || "—";
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["name", "fullName", "full_name", "playerName", "player_name", "shortName", "shortname", "displayName", "title", "label", "batsman", "batter", "bowler", "player"]) {
+      if (record[key] !== undefined && record[key] !== value) {
+        const result = displayScorecardValue(record[key]);
+        if (result !== "—") return result;
+      }
+    }
+  }
+  return "—";
+}
+
 export default function Home() {
   const [matches, setMatches] = useState<Match[]>(fallbackMatches);
   const [mode, setMode] = useState("demo");
@@ -193,13 +209,13 @@ export default function Home() {
                 {innings.batting?.length ? <>
                   <h5>Batting</h5>
                   <div className="scorecard-table-wrap"><table className="scorecard-table"><thead><tr><th>Batter</th><th>Dismissal</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>
-                    {innings.batting.map((row, rowIndex) => <tr key={String(row.batsman ?? row.batter ?? row.name ?? rowIndex)}><td>{String(row.batsman ?? row.batter ?? row.name ?? "—")}</td><td>{String(row.dismissal ?? row.out ?? "—")}</td><td>{String(row.r ?? row.runs ?? "—")}</td><td>{String(row.b ?? row.balls ?? "—")}</td><td>{String(row["4s"] ?? row.fours ?? "—")}</td><td>{String(row["6s"] ?? row.sixes ?? "—")}</td><td>{String(row.sr ?? row.strikeRate ?? "—")}</td></tr>)}
+                    {innings.batting.map((row, rowIndex) => <tr key={`${displayScorecardValue(row.batsman ?? row.batter ?? row.player ?? row.name ?? rowIndex)}-${rowIndex}`}><td>{displayScorecardValue(row.batsman ?? row.batter ?? row.player ?? row.name ?? row.playerName ?? row.fullName)}</td><td>{displayScorecardValue(row.dismissal ?? row.out ?? row.outDesc ?? row.out_desc)}</td><td>{String(row.r ?? row.runs ?? "—")}</td><td>{String(row.b ?? row.balls ?? "—")}</td><td>{String(row["4s"] ?? row.fours ?? "—")}</td><td>{String(row["6s"] ?? row.sixes ?? "—")}</td><td>{String(row.sr ?? row.strikeRate ?? "—")}</td></tr>)}
                   </tbody></table></div>
                 </> : null}
                 {innings.bowling?.length ? <>
                   <h5>Bowling</h5>
                   <div className="scorecard-table-wrap"><table className="scorecard-table"><thead><tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th>Eco</th></tr></thead><tbody>
-                    {innings.bowling.map((row, rowIndex) => <tr key={String(row.bowler ?? row.name ?? rowIndex)}><td>{String(row.bowler ?? row.name ?? "—")}</td><td>{String(row.o ?? row.overs ?? "—")}</td><td>{String(row.m ?? row.maidens ?? "—")}</td><td>{String(row.r ?? row.runs ?? "—")}</td><td>{String(row.w ?? row.wickets ?? "—")}</td><td>{String(row.eco ?? row.economy ?? "—")}</td></tr>)}
+                    {innings.bowling.map((row, rowIndex) => <tr key={`${displayScorecardValue(row.bowler ?? row.player ?? row.name ?? rowIndex)}-${rowIndex}`}><td>{displayScorecardValue(row.bowler ?? row.player ?? row.name ?? row.playerName ?? row.fullName)}</td><td>{String(row.o ?? row.overs ?? "—")}</td><td>{String(row.m ?? row.maidens ?? "—")}</td><td>{String(row.r ?? row.runs ?? "—")}</td><td>{String(row.w ?? row.wickets ?? "—")}</td><td>{String(row.eco ?? row.economy ?? "—")}</td></tr>)}
                   </tbody></table></div>
                 </> : null}
               </div>
