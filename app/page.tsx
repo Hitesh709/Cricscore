@@ -14,6 +14,12 @@ type Match = {
   summary: string; isDemo: boolean;
 };
 type ApiResponse = { matches?: Match[]; mode?: string; message?: string; providerConfigured?: boolean };
+type ScorecardRow = Record<string, string | number | boolean | null | undefined>;
+type ScorecardInnings = { inning?: string; batting?: ScorecardRow[]; bowling?: ScorecardRow[] };
+type ScorecardPayload = {
+  data?: { name?: string; scorecard?: ScorecardInnings[] };
+  error?: string;
+};
 
 const fallbackMatches: Match[] = [
   { id:"demo-1",format:"T20",status:"LIVE",series:"International T20 • Demo match",venue:"Sample Cricket Ground",startTime:"In progress",teamA:{name:"India",code:"IND",score:"168/4",overs:"18.2"},teamB:{name:"Australia",code:"AUS",score:"—",overs:"Yet to bat"},summary:"Sample scoreboard — not live data",isDemo:true },
@@ -38,6 +44,9 @@ export default function Home() {
   const [selected, setSelected] = useState("demo-1");
   const [mobileMenu, setMobileMenu] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [scorecard, setScorecard] = useState<ScorecardPayload["data"] | null>(null);
+  const [scorecardError, setScorecardError] = useState("");
+  const [scorecardLoading, setScorecardLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -71,6 +80,32 @@ export default function Home() {
 
   const featured = matches.find((match) => match.id === selected) ?? visibleMatches[0] ?? matches[0];
   const liveCount = matches.filter((match) => match.status === "LIVE").length;
+
+  useEffect(() => {
+    setScorecard(null);
+    setScorecardError("");
+  }, [featured?.id]);
+
+  const loadScorecard = async () => {
+    if (!featured || featured.isDemo) {
+      setScorecardError("Choose a real match from the CricketData feed first.");
+      return;
+    }
+    setScorecardLoading(true);
+    setScorecardError("");
+    setScorecard(null);
+    try {
+      const response = await fetch(`/api/scorecard?id=${encodeURIComponent(featured.id)}`, { cache: "no-store" });
+      const payload = (await response.json()) as ScorecardPayload;
+      if (!response.ok || payload.error) throw new Error(payload.error ?? "Scorecard is not available for this match.");
+      setScorecard(payload.data ?? null);
+      if (!payload.data) setScorecardError("The provider returned no scorecard data for this match.");
+    } catch (error) {
+      setScorecardError(error instanceof Error ? error.message : "Unable to load scorecard.");
+    } finally {
+      setScorecardLoading(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-paper text-slate-900">
@@ -145,7 +180,31 @@ export default function Home() {
         <div className="commentary-panel">
           <div className="commentary-head"><div><span className="commentary-kicker"><span className="status-dot status-demo"/> MATCH CENTRE</span><h3>{featured ? featured.teamA.name + " vs " + featured.teamB.name : "Match commentary"}</h3><small>{featured?.series ?? "Select a match"}{featured?.isDemo ? " • Sample match" : ""}</small></div><span className="format-pill">{featured?.format ?? "T20"}</span></div>
           <div className="commentary-score"><div><span>{featured?.teamA.code ?? "TEAM A"}</span><strong>{featured?.teamA.score ?? "—"}</strong><small>{featured?.teamA.overs ? featured.teamA.overs + " overs" : "Score unavailable"}</small></div><span className="versus">VS</span><div><span>{featured?.teamB.code ?? "TEAM B"}</span><strong>{featured?.teamB.score ?? "—"}</strong><small>{featured?.teamB.overs ?? "Score unavailable"}</small></div></div>
-          <div className="commentary-feed"><div className="feed-heading"><span>COMMENTARY</span><span className="demo-tag">PREVIEW</span></div><div className="commentary-empty"><span className="commentary-icon"><MessageCircle size={21}/></span><strong>Every ball has a story.</strong><p>Ball-by-ball commentary will appear here once a live cricket data provider is connected. This preview does not contain live delivery updates.</p></div></div>
+          <div className="commentary-feed">
+            <div className="feed-heading"><span>SCORECARD & COMMENTARY</span><span className="demo-tag">{featured?.isDemo ? "DEMO" : "PROVIDER DATA"}</span></div>
+            <div className="scorecard-action">
+              <div><strong>Match scorecard</strong><p>Load batting and bowling figures for the selected match.</p></div>
+              <button className="primary-button" onClick={loadScorecard} disabled={scorecardLoading || !featured || featured.isDemo}>{scorecardLoading ? "Loading…" : "Load scorecard"} <ArrowRight size={15}/></button>
+            </div>
+            {scorecardError && <p className="scorecard-error" role="status">{scorecardError}</p>}
+            {scorecard?.scorecard?.length ? scorecard.scorecard.map((innings, inningsIndex) => (
+              <div className="innings-card" key={innings.inning ?? inningsIndex}>
+                <h4>{innings.inning ?? `Innings ${inningsIndex + 1}`}</h4>
+                {innings.batting?.length ? <>
+                  <h5>Batting</h5>
+                  <div className="scorecard-table-wrap"><table className="scorecard-table"><thead><tr><th>Batter</th><th>Dismissal</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>
+                    {innings.batting.map((row, rowIndex) => <tr key={String(row.batsman ?? row.batter ?? row.name ?? rowIndex)}><td>{String(row.batsman ?? row.batter ?? row.name ?? "—")}</td><td>{String(row.dismissal ?? row.out ?? "—")}</td><td>{String(row.r ?? row.runs ?? "—")}</td><td>{String(row.b ?? row.balls ?? "—")}</td><td>{String(row["4s"] ?? row.fours ?? "—")}</td><td>{String(row["6s"] ?? row.sixes ?? "—")}</td><td>{String(row.sr ?? row.strikeRate ?? "—")}</td></tr>)}
+                  </tbody></table></div>
+                </> : null}
+                {innings.bowling?.length ? <>
+                  <h5>Bowling</h5>
+                  <div className="scorecard-table-wrap"><table className="scorecard-table"><thead><tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th>Eco</th></tr></thead><tbody>
+                    {innings.bowling.map((row, rowIndex) => <tr key={String(row.bowler ?? row.name ?? rowIndex)}><td>{String(row.bowler ?? row.name ?? "—")}</td><td>{String(row.o ?? row.overs ?? "—")}</td><td>{String(row.m ?? row.maidens ?? "—")}</td><td>{String(row.r ?? row.runs ?? "—")}</td><td>{String(row.w ?? row.wickets ?? "—")}</td><td>{String(row.eco ?? row.economy ?? "—")}</td></tr>)}
+                  </tbody></table></div>
+                </> : null}
+              </div>
+            )) : !scorecardError ? <div className="commentary-empty"><span className="commentary-icon"><MessageCircle size={21}/></span><strong>Ball-by-ball updates aren't available here yet.</strong><p>CricketData's published Fantasy Ball-By-Ball documentation currently says that endpoint is in testing. The current-matches API only supplies match-level score summaries. The scorecard button can retrieve innings figures when the provider makes them available for that match and plan.</p></div> : null}
+          </div>
           <div className="commentary-foot"><span><CircleDot size={13}/> {featured?.venue ?? "Match venue"}</span><span>Data feed: {mode === "demo" ? "Not connected" : "Setup required"}</span></div>
         </div>
       </section>
