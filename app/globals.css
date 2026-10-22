@@ -48,3 +48,15 @@ a{color:inherit;text-decoration:none}button,input,select{font:inherit}button{cur
 .scorecard-table td:first-child{font-weight:700}
 .scorecard-table td:nth-child(2){text-align:left;color:var(--muted);white-space:normal;min-width:90px}
 @media(max-width:600px){.scorecard-action{align-items:flex-start;flex-direction:column;padding:15px 17px}.scorecard-action .primary-button{width:100%;justify-content:center}.innings-card{padding:15px 17px}.scorecard-error{margin:10px 17px}}
+
+
+/* Ball-by-ball commentary */
+.commentary-action{background:#fbfbf8}
+.ball-commentary-list{padding:0 22px 18px}
+.ball-commentary-item{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:12px;align-items:start;padding:13px 0;border-bottom:1px solid var(--line)}
+.ball-commentary-item:last-child{border-bottom:0}
+.ball-over{display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:28px;padding:4px 6px;border-radius:6px;background:#eef5e8;color:#315d24;font-size:11px;font-weight:800}
+.ball-commentary-item p{margin:3px 0 0;color:var(--ink);font-size:12px;line-height:1.65}
+.ball-commentary-item small{display:block;margin-top:5px;color:var(--muted);font-size:10px}
+.wicket-tag{padding:4px 6px;border-radius:4px;background:#fff0ec;color:#a43a25;font-size:9px;font-weight:800;letter-spacing:.04em}
+@media(max-width:600px){.ball-commentary-list{padding:0 17px 14px}.ball-commentary-item{grid-template-columns:40px minmax(0,1fr);gap:9px}.wicket-tag{grid-column:2;justify-self:start}}
